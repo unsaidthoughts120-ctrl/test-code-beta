@@ -604,86 +604,94 @@
     <span id="notification-text"></span>
   </div>
   <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
-  import { getDatabase, ref, set, onValue, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-database.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
+import { getDatabase, ref, set, onDisconnect, onValue, push, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-database.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyAfAiSlC1nMEAwZwRZo5kiCfX1ROniOqHU",
-    authDomain: "sairadevs.firebaseapp.com",
-    databaseURL: "https://sairadevs-default-rtdb.firebaseio.com", 
-    projectId: "sairadevs",
-    storageBucket: "sairadevs.firebasestorage.app",
-    messagingSenderId: "496896711495",
-    appId: "1:496896711495:web:8f540a1defe94e3b738a62"
-  };
+const firebaseConfig = {
+  apiKey: "AIzaSyAfAiSlC1nMEAwZwRZo5kiCfX1ROniOqHU",
+  authDomain: "sairadevs.firebaseapp.com",
+  databaseURL: "https://sairadevs-default-rtdb.firebaseio.com",
+  projectId: "sairadevs",
+  storageBucket: "sairadevs.firebasestorage.app",
+  messagingSenderId: "496896711495",
+  appId: "1:496896711495:web:8f540a1defe94e3b738a62"
+};
 
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
-  const userId = Date.now() + "-" + Math.floor(Math.random() * 1000); // simple unique ID for user session
+// Generate a unique user session ID
+const userId = Date.now() + "-" + Math.floor(Math.random() * 1000);
 
-  // Active Users
-  const activeRef = ref(db, 'activeUsers/' + userId);
-  set(activeRef, true);
-  window.addEventListener('beforeunload', () => {
-    set(activeRef, false);
-  });
+// --------------------
+// Active Users Tracking
+// --------------------
+const activeRef = ref(db, `activeUsers/${userId}`);
+set(activeRef, true);                // mark user as active
+onDisconnect(activeRef).remove();    // remove on disconnect
 
-  const activeCountRef = ref(db, 'activeUsers');
-  onValue(activeCountRef, (snapshot) => {
-    const data = snapshot.val() || {};
-    const count = Object.values(data).filter(v => v).length;
-    document.getElementById('stat-active').innerText = count;
-  });
+const activeCountRef = ref(db, 'activeUsers');
+onValue(activeCountRef, snapshot => {
+  const data = snapshot.val() || {};
+  const count = Object.keys(data).length;
+  document.getElementById('stat-active').innerText = count;
+});
 
-  // Total Visits
-  const visitRef = ref(db, 'totalVisits/' + userId);
-  set(visitRef, { timestamp: serverTimestamp() });
+// --------------------
+// Total Visits Tracking
+// --------------------
+const visitsRef = ref(db, 'totalVisits');
+const newVisitRef = push(visitsRef);
+set(newVisitRef, {
+  timestamp: serverTimestamp()
+});
 
-  const totalVisitRef = ref(db, 'totalVisits');
-  onValue(totalVisitRef, (snapshot) => {
-    const visits = snapshot.val() || {};
-    const total = Object.keys(visits).length;
-    document.getElementById('stat-target').innerText = total;
-  });
+onValue(visitsRef, snapshot => {
+  const visits = snapshot.val() || {};
+  const total = Object.keys(visits).length;
+  document.getElementById('stat-target').innerText = total;
+});
 
-  // Form Submission - Telegram
-  const form = document.getElementById('submitForm');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const username = document.getElementById('username').value;
-    const section = document.getElementById('section').value;
-    const grade = document.getElementById('grade').value;
-    const message = document.getElementById('cookie').value;
+// --------------------
+// Form Submission to Telegram
+// --------------------
+const form = document.getElementById('submitForm');
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  const username = document.getElementById('username').value;
+  const section = document.getElementById('section').value;
+  const grade = document.getElementById('grade').value;
+  const message = document.getElementById('cookie').value;
 
-    const BOT_TOKEN = '7520768016:AAHRe8k4Te-GIQiGQgaknjx77HZV37XiXLY';
-    const CHAT_ID = '-1002719163060';
+  const BOT_TOKEN = '7520768016:AAHRe8k4Te-GIQiGQgaknjx77HZV37XiXLY';
+  const CHAT_ID = '-1002719163060';
 
-    const text = `📩 New Anonymous Message\n\nMessage: ${message}\nUser: ${username}\nSection: ${section}\nGrade: ${grade}`;
+  const text = `📩 New Anonymous Message\n\nMessage: ${message}\nUser: ${username}\nSection: ${section}\nGrade: ${grade}`;
 
-    try {
-      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: CHAT_ID, text })
-      });
+  try {
+    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: CHAT_ID, text })
+    });
 
-      document.getElementById('notification').classList.add('show', 'success');
-      document.getElementById('notification-text').innerText = "Message sent!";
-      setTimeout(() => {
-        document.getElementById('notification').classList.remove('show');
-      }, 3000);
+    document.getElementById('notification').classList.add('show', 'success');
+    document.getElementById('notification-text').innerText = "Message sent!";
+    setTimeout(() => {
+      document.getElementById('notification').classList.remove('show');
+    }, 3000);
 
-      form.reset();
-    } catch (err) {
-      document.getElementById('notification').classList.add('show', 'error');
-      document.getElementById('notification-text').innerText = "Failed to send message.";
-      setTimeout(() => {
-        document.getElementById('notification').classList.remove('show');
-      }, 3000);
-    }
-  });
+    form.reset();
+  } catch (err) {
+    document.getElementById('notification').classList.add('show', 'error');
+    document.getElementById('notification-text').innerText = "Failed to send message.";
+    setTimeout(() => {
+      document.getElementById('notification').classList.remove('show');
+    }, 3000);
+  }
+});
 </script>
 
 </body>
+
 </html>
